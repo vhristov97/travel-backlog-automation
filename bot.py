@@ -8,6 +8,7 @@ from classifier import process_place
 
 logger = logging.getLogger(__name__)
 
+#TODO: Remove comment from 2nd ID
 ALLOWED_USERS = {config.TELEGRAM_USER_ID_1}#, config.TELEGRAM_USER_ID_2}
 
 

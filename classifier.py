@@ -41,12 +41,16 @@ def _build_row(data, message_date):
 def process_place(text, message_date):
     """Classify a place and write it to the sheet. Returns a reply string for the user."""
     data = classify_place(text)
+
+    if isinstance(data, list):
+        return "It looks like you sent more than one place. Please send one at a time."
+
     classification = data.get("classification")
 
     if classification == "multiple":
         return "It looks like you sent more than one place. Please send one at a time."
 
-    if classification == "local":
+    if classification == "local" or (data.get("country") or "").lower() == "serbia":
         return "Local places aren't supported yet."
 
     place_name = data.get("place_name") or text

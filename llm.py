@@ -32,11 +32,13 @@ You MUST respond with valid JSON only, no other text. Use this exact schema:
 }
 
 Rules:
+- IMPORTANT: Any place in Serbia (city, venue, attraction) MUST be classified as "local". This includes Belgrade, Novi Sad, Niš, and any other Serbian location.
 - "Foreign" means anything outside Serbia.
 - If a country name is given (e.g. "Japan"), classify as "foreign_city" and use the capital as the city.
 - If classification is "local", "unclear", or "multiple", still include whatever fields you can. Use null for unknown fields.
 - For season fields, use null if you cannot determine the season (e.g. for unclear places).
 - For "multiple", set place_name/city/country to null.
+- The three season ranges must not overlap. A month can only belong to one category: peak_season, good_cheaper, or avoid.
 """
 
 
@@ -49,5 +51,9 @@ def classify_place(text):
         messages=[{"role": "user", "content": text}],
     )
 
-    raw = response.content[0].text
-    return json.loads(raw)
+    raw = response.content[0].text.strip()
+    if raw.startswith("```"):
+        raw = raw.split("```")[1]
+        if raw.startswith("json"):
+            raw = raw[4:]
+    return json.loads(raw.strip())
