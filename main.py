@@ -1,15 +1,10 @@
-import logging
-
 import config
 from bot import create_app
-
-logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    level=logging.INFO,
-)
+from logging_setup import setup_logging
 
 
 def main():
+    setup_logging()
     config.validate()
     app = create_app()
     app.run_polling()

@@ -24,8 +24,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         reply = process_place(text, update.message.date)
     except Exception as e:
-        logger.exception("Error processing place")
         error_type = type(e).__name__
+        logger.exception(
+            "Error processing place",
+            extra={
+                "input_text": text,
+                "user_id": user_id,
+                "error_type": error_type,
+            },
+        )
         reply = f"Something went wrong ({error_type}). Please try again."
 
     await update.message.reply_text(reply)
