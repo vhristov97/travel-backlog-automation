@@ -160,6 +160,32 @@ If Claude can't figure out the place from the name alone it'll still log it — 
 
 ---
 
+## Logging
+
+Errors are persisted to `logs/errors.jsonl` — one JSON object per line:
+
+```json
+{
+  "time": "2026-04-09T09:28:43.801600+00:00",
+  "level": "ERROR",
+  "logger": "bot",
+  "message": "Error processing place",
+  "input_text": "Noma Copenhagen",
+  "user_id": 123456789,
+  "error_type": "AnthropicError",
+  "traceback": "Traceback (most recent call last): ..."
+}
+```
+
+- INFO+ goes to stdout as before
+- Only ERROR-level events are written to the file
+- Rotates daily, retains 30 days
+- `logs/` is gitignored
+
+The format is intentionally machine-readable — structured for a future pipeline that will read errors and use an LLM to generate fix PRs automatically.
+
+---
+
 ## Project Structure
 
 ```
@@ -169,7 +195,10 @@ travel-backlog-automation/
 ├── llm.py               # Claude API integration & prompt logic
 ├── sheets.py            # Google Sheets read/write
 ├── classifier.py        # Place classification logic
+├── logging_setup.py     # JSON error logging to logs/errors.jsonl
+├── config.py            # Env var loading & validation
 ├── requirements.txt
 ├── credentials.json     # Google service account (not committed)
-└── .env                 # Secrets (not committed)
+├── .env                 # Secrets (not committed)
+└── logs/                # Error logs (not committed)
 ```
