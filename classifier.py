@@ -19,22 +19,52 @@ def _format_months(season):
     return f"{MONTH_ABBR[season['start']]}–{MONTH_ABBR[season['end']]}"
 
 
-def _build_row(data, message_date):
-    """Build a sheet row from LLM data and the Telegram message date."""
+def _build_city_row(data, message_date, text):
+    """Build a Foreign Cities row.
+
+    Columns: Date Requested | Date Processed | Input | City | Country |
+             Peak Season | Good & Cheaper | Price | Status | LLM Notes | Visited | Notes
+    """
     date_requested = message_date.strftime("%Y-%m-%d")
     date_processed = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
     return [
         date_requested,
         date_processed,
-        data.get("place_name") or "",
+        text,
         data.get("city") or "",
         data.get("country") or "",
         _format_months(data.get("peak_season")),
         _format_months(data.get("good_cheaper")),
-        _format_months(data.get("avoid")),
-        "",  # Status (set below if needed)
-        "",  # Notes (always empty)
+        data.get("price_level") or "",
+        "",  # Status (set by caller)
+        data.get("description") or "",
+        "",  # Visited (manual)
+        "",  # Notes (manual)
+    ]
+
+
+def _build_things_row(data, message_date, text):
+    """Build a Foreign Things To Do row.
+
+    Columns: Date Requested | Date Processed | Input | Place Name | City | Country |
+             Price | Status | LLM Notes | Visited | Notes
+    """
+    date_requested = message_date.strftime("%Y-%m-%d")
+    date_processed = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    return [
+        date_requested,
+        date_processed,
+        text,
+        data.get("place_name") or "",
+        data.get("city") or "",
+        data.get("country") or "",
+        data.get("price_eur") or "",
+        "",  # Status (set by caller)
+        data.get("description") or "",
+        "",  # Visited (manual)
+        "",  # Notes (manual)
     ]
 
 
@@ -53,28 +83,35 @@ def process_place(text, message_date):
     if classification == "local" or (data.get("country") or "").lower() == "serbia":
         return "Local places aren't supported yet."
 
-    place_name = data.get("place_name") or text
-
-    # Check for duplicates
-    existing_tab = check_duplicate(place_name)
-    if existing_tab:
-        return f'"{place_name}" is already in {existing_tab}.'
-
-    # Determine target tab
+    # Determine target tab and dedup value
     if classification == "foreign_city":
         tab = TAB_FOREIGN_CITIES
+        dedup_value = data.get("city")
     else:
         tab = TAB_FOREIGN_THINGS
+        dedup_value = data.get("place_name")
 
-    row = _build_row(data, message_date)
+    # Check for duplicates
+    if dedup_value and check_duplicate(tab, dedup_value):
+        return f'"{dedup_value}" is already in {tab}.'
 
-    # Set status for unclear places
+    # Build tab-specific row
+    if tab == TAB_FOREIGN_CITIES:
+        row = _build_city_row(data, message_date, text)
+        status_idx = 8
+    else:
+        row = _build_things_row(data, message_date, text)
+        status_idx = 7
+
+    # Set status
     if classification == "unclear":
-        row[8] = "⚠️ needs review"
+        row[status_idx] = "⚠️ needs review"
+    else:
+        row[status_idx] = "✅ Valid"
 
     add_place(tab, row)
 
     if classification == "unclear":
-        return f'Added "{place_name}" to {tab} with ⚠️ needs review.'
+        return f'Added to {tab} with ⚠️ needs review.'
 
-    return f'Added "{place_name}" to {tab}.'
+    return f'Added "{dedup_value}" to {tab}.'

@@ -30,10 +30,18 @@ Telegram polling → bot.py (auth + routing) → classifier.py → llm.py (Claud
 
 ## Sheet Columns
 
-`Date Requested | Date Processed | Place Name | City | Country | Peak Season | Good & Cheaper | Avoid | Status | Notes`
+**Foreign Cities:**
+`Date Requested | Date Processed | Input | City | Country | Peak Season | Good & Cheaper | Price | Status | LLM Notes | Visited | Notes`
 
-- Duplicates are checked before writing — bot skips and notifies the user
-- Notes column is left empty (manual)
+**Foreign Things To Do:**
+`Date Requested | Date Processed | Input | Place Name | City | Country | Price | Status | LLM Notes | Visited | Notes`
+
+- **Input** = raw Telegram message text
+- **Price** = €/€€/€€€ for cities (relative global cost), ~€X for things to do (EUR estimate), "Free" if free, blank if unknown
+- **Status** = `✅ Valid` on success, `⚠️ needs review` if unclear
+- **LLM Notes** = short description + recommendations from the LLM
+- **Visited** and **Notes** = left empty (manual)
+- Duplicates are checked before writing (city name for Cities, place name for Things To Do) — bot skips and notifies the user
 
 ## Bot Replies
 
@@ -71,4 +79,4 @@ Currently uses Claude API (`anthropic` SDK). The integration lives entirely in `
 
 ## Roadmap Context
 
-1. Claude API (current) → local Ollama model → single-command Docker/bash orchestration → always-on machine (Raspberry Pi) → Instagram Shorts video frame analysis
+1. Claude API (current) → local Ollama model → single-command Docker/bash orchestration → audit log → automated problem reports → always-on machine (Raspberry Pi) → Instagram Shorts video frame analysis → local categories

@@ -28,7 +28,9 @@ You MUST respond with valid JSON only, no other text. Use this exact schema:
   "country": "the country name",
   "peak_season": {"start": 1, "end": 12},
   "good_cheaper": {"start": 1, "end": 12},
-  "avoid": {"start": 1, "end": 12}
+  "price_level": "€ | €€ | €€€",
+  "price_eur": "~€12 | Free | null",
+  "description": "short description and recommendations"
 }
 
 Rules:
@@ -38,7 +40,10 @@ Rules:
 - If classification is "local", "unclear", or "multiple", still include whatever fields you can. Use null for unknown fields.
 - For season fields, use null if you cannot determine the season (e.g. for unclear places).
 - For "multiple", set place_name/city/country to null.
-- The three season ranges must not overlap. A month can only belong to one category: peak_season, good_cheaper, or avoid.
+- The two season ranges must not overlap. A month can only belong to one category: peak_season or good_cheaper.
+- price_level: only for "foreign_city" classification. Use "€" for cheap cities, "€€" for mid-range, "€€€" for expensive, relative to global city costs. Use null for other classifications.
+- price_eur: only for "foreign_place" classification. Approximate price in EUR (e.g. "~€17" for a museum ticket, "~€25" for an average restaurant meal). Use "Free" if the place is free to visit. Use null if you have no reliable information — never fabricate a price.
+- description: a brief description of the place with travel recommendations. 1-2 sentences.
 """
 
 

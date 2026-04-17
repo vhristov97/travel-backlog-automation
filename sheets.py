@@ -8,7 +8,7 @@ SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 TAB_FOREIGN_CITIES = "Foreign Cities"
 TAB_FOREIGN_THINGS = "Foreign Things To Do"
 
-PLACE_NAME_COL = 3  # Column C (1-indexed)
+DEDUP_COL = 4  # Column D (1-indexed) — City for Cities tab, Place Name for Things To Do tab
 
 _client = None
 
@@ -27,25 +27,24 @@ def _get_sheet():
     return _get_client().open_by_key(config.GOOGLE_SHEETS_ID)
 
 
-def check_duplicate(place_name):
-    """Check if a place already exists in either tab. Returns the tab name if found, None otherwise."""
+def check_duplicate(tab_name, value):
+    """Check if a value already exists in the dedup column of the given tab.
+
+    For Foreign Cities, pass the city name.
+    For Foreign Things To Do, pass the place name.
+    Returns True if found, False otherwise.
+    """
     sheet = _get_sheet()
-    for tab_name in [TAB_FOREIGN_CITIES, TAB_FOREIGN_THINGS]:
-        worksheet = sheet.worksheet(tab_name)
-        values = worksheet.col_values(PLACE_NAME_COL)
-        for val in values[1:]:  # skip header
-            if val.strip().lower() == place_name.strip().lower():
-                return tab_name
-    return None
+    worksheet = sheet.worksheet(tab_name)
+    values = worksheet.col_values(DEDUP_COL)
+    for val in values[1:]:  # skip header
+        if val.strip().lower() == value.strip().lower():
+            return True
+    return False
 
 
 def add_place(tab_name, row_data):
-    """Append a row to the specified tab.
-
-    row_data should be a list matching the column order:
-    [Date Requested, Date Processed, Place Name, City, Country,
-     Peak Season, Good & Cheaper, Avoid, Status, Notes]
-    """
+    """Append a row to the specified tab."""
     sheet = _get_sheet()
     worksheet = sheet.worksheet(tab_name)
     worksheet.append_row(row_data, value_input_option="USER_ENTERED")
