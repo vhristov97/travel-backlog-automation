@@ -52,6 +52,7 @@ If Claude can't confidently identify the place, it logs it with a **⚠️ needs
 
 **Bot replies:**
 - Success → e.g. "Added Noma to Foreign Things To Do"
+- Success with cascade → e.g. "Added Paris to Foreign Cities. Also added 4 attractions: Eiffel Tower, Louvre, Notre Dame, Arc de Triomphe."
 - Duplicate → lets you know it already exists
 - Local place → "Local places aren't supported yet"
 - Unclear → "Added with ⚠️ needs review"
@@ -71,6 +72,25 @@ Claude follows these rules:
 - **Can't identify the place** → Foreign Things To Do tab, flagged as ⚠️ needs review
 
 > "Foreign" = anything outside Serbia (i.e. would need a passport to visit).
+
+---
+
+## Cross-linking the Two Tabs
+
+The two tabs stay in sync automatically — one message can produce rows in both.
+
+- **Add a city** → the bot also fills **Foreign Things To Do** with that city's iconic attractions. Paris gets Eiffel Tower, Louvre, Notre Dame, etc.
+- **Add a specific place** → the bot also ensures the parent city exists in **Foreign Cities**. Send "Shibuya Crossing" and Tokyo is added too.
+
+How it stays clean:
+
+- **Quality over quantity.** Claude tags each candidate attraction as `world_famous`, `nationally_famous`, or `local`. The code keeps only `world_famous` entries, up to 5 — so Paris gets its real icons, not a padded list. If a city has no world-famous landmarks (Ljubljana, Tallinn), it falls back to the top 3 `nationally_famous` entries so you still get something useful.
+- **Whole districts and "old towns" are excluded.** Only specific venues and landmarks are added.
+- **One hop only.** Auto-added cities do NOT trigger their own attraction cascade — prevents surprise bulk inserts.
+- **Duplicate-safe.** Attractions already in the sheet are skipped. If the parent city is already there, it's not re-added.
+- **Failure-tolerant.** If the cascade fails (API error, rate limit), the primary row still lands and you still get a reply.
+
+Auto-added rows are tagged in the `Input` column as `auto: from "<trigger>"` so you can tell them apart from manual entries.
 
 ---
 

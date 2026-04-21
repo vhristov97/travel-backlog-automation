@@ -47,6 +47,52 @@ Rules:
 """
 
 
+ATTRACTIONS_SYSTEM_PROMPT = """You are a travel attractions recommender. Given a city (and country), return its top attractions, each tagged with a notability tier so downstream code can filter strictly.
+
+You MUST respond with valid JSON only, no other text. Use this exact schema:
+
+{
+  "attractions": [
+    {
+      "place_name": "the attraction's common English name",
+      "notability": "world_famous | nationally_famous | local",
+      "price_eur": "~€17 | Free | null",
+      "description": "short description and recommendations"
+    }
+  ]
+}
+
+Notability tiers — be strict, most attractions are NOT world_famous:
+- "world_famous": a random well-travelled foreigner on another continent would recognise the name. Eiffel Tower, Colosseum, Taj Mahal, Machu Picchu, Statue of Liberty, Louvre, Acropolis, Great Wall. Typical cities have 0-3 of these; Paris/Rome/Tokyo have 4-5.
+- "nationally_famous": most residents of that country know it, but foreigners outside the region usually do not. Smaller castles, regional cathedrals, national museums, famous markets, well-known parks.
+- "local": interesting to visitors already in the city, but not a draw on its own. Neighbourhoods, alternative scenes, specific restaurants, small galleries.
+
+Rules:
+- Return up to 8 candidates total across all tiers. Do not pad — if a city has only 1 world_famous and 2 nationally_famous sites, return 3 items.
+- STRICTLY EXCLUDE: whole districts, neighbourhoods, old towns, entire streets, general areas, or the city itself. Only specific venues, landmarks, or sites.
+- Never fabricate attractions.
+- price_eur: approximate price in EUR to visit/enter (e.g. "~€17"). Use "Free" if free to visit. Use null if you have no reliable information — never fabricate a price.
+- description: 1-2 sentences, brief description with travel recommendations.
+"""
+
+# Filtering happens in code, not in the prompt, because LLMs anchor on the cap.
+# If a city has any world_famous landmarks, we take up to MAX_WORLD_FAMOUS of them.
+# Otherwise we fall back to the top MAX_FALLBACK_NATIONAL nationally_famous
+# entries, so smaller cities (Ljubljana, Tallinn) still get their best-known sites.
+MAX_WORLD_FAMOUS = 5
+MAX_FALLBACK_NATIONAL = 3
+
+
+def _parse_json_response(raw):
+    """Strip code fences and parse the response as JSON."""
+    raw = raw.strip()
+    if raw.startswith("```"):
+        raw = raw.split("```")[1]
+        if raw.startswith("json"):
+            raw = raw[4:]
+    return json.loads(raw.strip())
+
+
 def classify_place(text):
     """Send a place name to Claude and return the parsed classification."""
     response = client.messages.create(
@@ -56,9 +102,39 @@ def classify_place(text):
         messages=[{"role": "user", "content": text}],
     )
 
-    raw = response.content[0].text.strip()
-    if raw.startswith("```"):
-        raw = raw.split("```")[1]
-        if raw.startswith("json"):
-            raw = raw[4:]
-    return json.loads(raw.strip())
+    return _parse_json_response(response.content[0].text)
+
+
+def get_city_attractions(city, country):
+    """Ask Claude for up to 5 iconic attractions in a given city.
+
+    Returns a list of dicts with keys: place_name, price_eur, description.
+    Returns [] if the response is malformed.
+    """
+    user_msg = f"{city}, {country}" if country else city
+    response = client.messages.create(
+        model=config.ANTHROPIC_MODEL,
+        max_tokens=800,
+        system=ATTRACTIONS_SYSTEM_PROMPT,
+        messages=[{"role": "user", "content": user_msg}],
+    )
+
+    data = _parse_json_response(response.content[0].text)
+    attractions = data.get("attractions")
+    if not isinstance(attractions, list):
+        return []
+
+    # Filter by tier. Prefer world_famous; if a city has none, fall back to
+    # nationally_famous so small cities still get their best-known sites.
+    world_famous = [
+        a for a in attractions
+        if isinstance(a, dict) and a.get("notability") == "world_famous"
+    ]
+    if world_famous:
+        return world_famous[:MAX_WORLD_FAMOUS]
+
+    national = [
+        a for a in attractions
+        if isinstance(a, dict) and a.get("notability") == "nationally_famous"
+    ]
+    return national[:MAX_FALLBACK_NATIONAL]
