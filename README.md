@@ -170,6 +170,12 @@ If Claude can't figure out the place from the name alone it'll still log it — 
 
 ---
 
+## Known Limitations
+
+- **Price estimates are unreliable.** The LLM's `Price` column for Foreign Things To Do is often wildly inaccurate (e.g. Tomorrowland returned ~€200 when real tickets start at €350+). Needs better prompt rules or an external price source. Treat prices as rough guesses only.
+
+---
+
 ## Logging
 
 Errors are persisted to `logs/errors.jsonl` — one JSON object per line:
