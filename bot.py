@@ -4,6 +4,7 @@ from telegram import Update
 from telegram.ext import Application, ContextTypes, MessageHandler, filters
 
 import config
+import asyncio
 from classifier import process_place
 
 logger = logging.getLogger(__name__)
@@ -22,7 +23,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     try:
-        reply = process_place(text, update.message.date)
+        reply = await asyncio.to_thread(process_place, text, update.message.date)
     except Exception as e:
         error_type = type(e).__name__
         logger.exception(

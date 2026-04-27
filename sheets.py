@@ -20,6 +20,7 @@ def _get_client():
             "credentials.json", scopes=SCOPES
         )
         _client = gspread.authorize(creds)
+        _client.set_timeout(15) #seconds
     return _client
 
 

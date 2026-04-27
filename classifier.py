@@ -22,11 +22,22 @@ def _format_months(season):
     return f"{MONTH_ABBR[season['start']]}–{MONTH_ABBR[season['end']]}"
 
 
-def _build_city_row(data, message_date, text):
+def _format_days(days):
+    """Format {"min": 3, "max": 5} into "3–5 days" / "1 day" / ""."""
+    if not days or days.get("min") is None or days.get("max") is None:
+        return ""
+    lo, hi = days["min"], days["max"]
+    if lo == hi:
+        return f"{lo} day" if lo == 1 else f"{lo} days"
+    return f"{lo}–{hi} days"
+
+
+def _build_city_row(data, message_date, text, status):
     """Build a Foreign Cities row.
 
     Columns: Date Requested | Date Processed | Input | City | Country |
-             Peak Season | Good & Cheaper | Price | Status | LLM Notes | Visited | Notes
+             Peak Season | Good & Cheaper | Price | Days Needed | Status |
+             LLM Notes | Visited | Notes
     """
     date_requested = message_date.strftime("%Y-%m-%d")
     date_processed = datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -40,14 +51,15 @@ def _build_city_row(data, message_date, text):
         _format_months(data.get("peak_season")),
         _format_months(data.get("good_cheaper")),
         data.get("price_level") or "",
-        "",  # Status (set by caller)
+        _format_days(data.get("days_needed")),
+        status,
         data.get("description") or "",
         "",  # Visited (manual)
         "",  # Notes (manual)
     ]
 
 
-def _build_things_row(data, message_date, text):
+def _build_things_row(data, message_date, text, status):
     """Build a Foreign Things To Do row.
 
     Columns: Date Requested | Date Processed | Input | Place Name | City | Country |
@@ -64,7 +76,7 @@ def _build_things_row(data, message_date, text):
         data.get("city") or "",
         data.get("country") or "",
         data.get("price_eur") or "",
-        "",  # Status (set by caller)
+        status,
         data.get("description") or "",
         "",  # Visited (manual)
         "",  # Notes (manual)
@@ -73,17 +85,13 @@ def _build_things_row(data, message_date, text):
 
 def _write_city(data, message_date, source_text, status):
     """Build and append a Foreign Cities row. Returns True on success."""
-    row = _build_city_row(data, message_date, source_text)
-    row[8] = status
-    add_place(TAB_FOREIGN_CITIES, row)
+    add_place(TAB_FOREIGN_CITIES, _build_city_row(data, message_date, source_text, status))
     return True
 
 
 def _write_thing(data, message_date, source_text, status):
     """Build and append a Foreign Things To Do row. Returns True on success."""
-    row = _build_things_row(data, message_date, source_text)
-    row[7] = status
-    add_place(TAB_FOREIGN_THINGS, row)
+    add_place(TAB_FOREIGN_THINGS, _build_things_row(data, message_date, source_text, status))
     return True
 
 

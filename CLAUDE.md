@@ -31,13 +31,14 @@ Telegram polling → bot.py (auth + routing) → classifier.py → llm.py (Claud
 ## Sheet Columns
 
 **Foreign Cities:**
-`Date Requested | Date Processed | Input | City | Country | Peak Season | Good & Cheaper | Price | Status | LLM Notes | Visited | Notes`
+`Date Requested | Date Processed | Input | City | Country | Peak Season | Good & Cheaper | Price | Days Needed | Status | LLM Notes | Visited | Notes`
 
 **Foreign Things To Do:**
 `Date Requested | Date Processed | Input | Place Name | City | Country | Price | Status | LLM Notes | Visited | Notes`
 
 - **Input** = raw Telegram message text
 - **Price** = €/€€/€€€ for cities (relative global cost), ~€X for things to do (EUR estimate), "Free" if free, blank if unknown
+- **Days Needed** = typical visit length for cities, e.g. `3–5 days` (cities only)
 - **Status** = `✅ Valid` on success, `⚠️ needs review` if unclear
 - **LLM Notes** = short description + recommendations from the LLM
 - **Visited** and **Notes** = left empty (manual)

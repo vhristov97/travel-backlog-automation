@@ -30,6 +30,7 @@ You MUST respond with valid JSON only, no other text. Use this exact schema:
   "good_cheaper": {"start": 1, "end": 12},
   "price_level": "€ | €€ | €€€",
   "price_eur": "~€12 | Free | null",
+  "days_needed": {"min": 3, "max": 5},
   "description": "short description and recommendations"
 }
 
@@ -43,6 +44,7 @@ Rules:
 - The two season ranges must not overlap. A month can only belong to one category: peak_season or good_cheaper.
 - price_level: only for "foreign_city" classification. Use "€" for cheap cities, "€€" for mid-range, "€€€" for expensive, relative to global city costs. Use null for other classifications.
 - price_eur: only for "foreign_place" classification. Approximate price in EUR (e.g. "~€17" for a museum ticket, "~€25" for an average restaurant meal). Use "Free" if the place is free to visit. Use null if you have no reliable information — never fabricate a price.
+- days_needed: only for "foreign_city" classification. Estimate the typical number of days a traveller needs to see the city well. min and max may be equal (e.g. {"min": 1, "max": 1} for a one-day stop). Use null for non-city classifications or if you cannot estimate.
 - description: a brief description of the place with travel recommendations. 1-2 sentences.
 """
 
@@ -97,7 +99,7 @@ def classify_place(text):
     """Send a place name to Claude and return the parsed classification."""
     response = client.messages.create(
         model=config.ANTHROPIC_MODEL,
-        max_tokens=300,
+        max_tokens=400,
         system=SYSTEM_PROMPT,
         messages=[{"role": "user", "content": text}],
     )
