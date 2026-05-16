@@ -4,17 +4,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Places Tracker** — a Telegram bot that classifies travel wishlist items (sent as plain text messages) using Claude API and logs them to Google Sheets. Two users are whitelisted (owner + SO). Runs via Telegram polling so it catches messages sent while offline. One place per message only.
+**Places Tracker** — a Telegram bot that classifies travel wishlist items (sent as plain text messages) using an LLM and logs them to Google Sheets. Two users are whitelisted (owner + SO). Runs via Telegram polling so it catches messages sent while offline. One place per message only.
 
 ## Architecture
 
 ```
-Telegram polling → bot.py (auth + routing) → classifier.py → llm.py (Claude API) → sheets.py
+Telegram polling → bot.py (auth + routing) → classifier.py → llm.py (Ollama or Claude) → sheets.py
 ```
 
 - `main.py` — entry point, starts the polling loop
 - `bot.py` — Telegram message handling, user whitelist enforcement
-- `llm.py` — Claude API calls and prompt logic
+- `llm.py` — LLM calls and prompt logic; switches between Ollama (default) and Claude API based on `LLM_BACKEND`
 - `classifier.py` — decides which Google Sheets tab a place belongs to (whole city vs. specific venue)
 - `sheets.py` — Google Sheets read/write via service account
 
@@ -50,7 +50,7 @@ Telegram polling → bot.py (auth + routing) → classifier.py → llm.py (Claud
 - Duplicate → tells you it already exists
 - Local place → "Local places aren't supported yet"
 - Unclear → "Added with ⚠️ needs review"
-- Error → what failed (Claude API / Google Sheets) and to retry
+- Error → what failed (LLM / Google Sheets) and to retry
 - Multiple places detected → asks to send one at a time
 
 ## Running
@@ -63,12 +63,27 @@ Eventually the full stack will launch with a single command (`docker compose up`
 
 ## Environment Variables (`.env`)
 
+Common to both backends:
+
 ```
 TELEGRAM_BOT_TOKEN
 TELEGRAM_USER_ID_1
 TELEGRAM_USER_ID_2
 GOOGLE_SHEETS_ID
-ANTHROPIC_API_KEY
+LLM_BACKEND=ollama   # or "claude"; defaults to "ollama" if unset
+```
+
+Ollama backend (production / desktop):
+
+```
+OLLAMA_HOST=http://localhost:11434   # default
+OLLAMA_MODEL=qwen2.5:7b              # default
+```
+
+Claude backend (laptop / development without GPU):
+
+```
+ANTHROPIC_API_KEY=...
 ANTHROPIC_MODEL=claude-haiku-4-5-20251001
 ```
 
@@ -76,8 +91,13 @@ ANTHROPIC_MODEL=claude-haiku-4-5-20251001
 
 ## LLM
 
-Currently uses Claude API (`anthropic` SDK). The integration lives entirely in `llm.py` so it can be swapped for a local Ollama model later without touching other modules.
+The bot supports two LLM backends behind a single interface in `llm.py`, switchable via `LLM_BACKEND`:
+
+- **`ollama` (default)** — local Qwen 2.5 7B via Ollama on the desktop GPU. Uses Ollama's structured-output feature (`format=<JSON schema>`) for strict response shape. Requires Ollama ≥ 0.5.0 and `ollama pull qwen2.5:7b`.
+- **`claude`** — Anthropic Claude Haiku via the `anthropic` SDK. Used on the laptop where there's no GPU. Output validated by Pydantic on the Python side.
+
+Both backends share the same Pydantic response models (`ClassifyResponse`, `AttractionsResponse`), so output is shape-validated regardless of backend. `classifier.py` consumes plain dicts and is backend-agnostic.
 
 ## Roadmap Context
 
-1. Claude API (current) → local Ollama model → single-command Docker/bash orchestration → audit log → automated problem reports → always-on machine (Raspberry Pi) → Instagram Shorts video frame analysis → local categories
+1. ~~Claude API~~ → **local Ollama model (current)** → single-command Docker/bash orchestration → audit log → automated problem reports → always-on machine (Raspberry Pi) → Instagram Shorts video frame analysis → local categories

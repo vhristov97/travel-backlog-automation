@@ -1,10 +1,72 @@
-import json
+import logging
+from typing import Literal, Optional
 
-import anthropic
+from pydantic import BaseModel
 
 import config
 
-client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
+logger = logging.getLogger(__name__)
+
+
+# ---------- Pydantic response models (single source of truth) -----------------
+
+class SeasonRange(BaseModel):
+    start: int
+    end: int
+
+
+class DaysNeeded(BaseModel):
+    min: int
+    max: int
+
+
+class ClassifyResponse(BaseModel):
+    classification: Literal["foreign_city", "foreign_place", "local", "unclear", "multiple"]
+    place_name: Optional[str] = None
+    city: Optional[str] = None
+    country: Optional[str] = None
+    peak_season: Optional[SeasonRange] = None
+    good_cheaper: Optional[SeasonRange] = None
+    price_level: Optional[Literal["€", "€€", "€€€"]] = None
+    price_eur: Optional[str] = None
+    days_needed: Optional[DaysNeeded] = None
+    description: Optional[str] = None
+
+
+class Attraction(BaseModel):
+    place_name: str
+    notability: Literal["world_famous", "nationally_famous", "local"]
+    price_eur: Optional[str] = None
+    description: str
+
+
+class AttractionsResponse(BaseModel):
+    attractions: list[Attraction]
+
+
+# ---------- Backend init (lazy: only the active backend's SDK is imported) ----
+
+_ollama = None
+_claude = None
+
+if config.LLM_BACKEND == "ollama":
+    from ollama import Client as OllamaClient
+
+    _ollama = OllamaClient(host=config.OLLAMA_HOST)
+    try:
+        _ollama.list()
+        logger.info("LLM backend: ollama (%s) at %s", config.OLLAMA_MODEL, config.OLLAMA_HOST)
+    except Exception:
+        logger.exception("Ollama unreachable at %s", config.OLLAMA_HOST)
+        raise
+elif config.LLM_BACKEND == "claude":
+    import anthropic
+
+    _claude = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
+    logger.info("LLM backend: claude (%s)", config.ANTHROPIC_MODEL)
+
+
+# ---------- Prompts (verbatim from the original Claude integration) -----------
 
 SYSTEM_PROMPT = """You are a travel place classifier. Given a place name or description, you must:
 
@@ -85,58 +147,69 @@ MAX_WORLD_FAMOUS = 5
 MAX_FALLBACK_NATIONAL = 3
 
 
-def _parse_json_response(raw):
-    """Strip code fences and parse the response as JSON."""
-    raw = raw.strip()
+# ---------- Per-backend call functions ----------------------------------------
+
+def _call_ollama(system_prompt: str, user_msg: str, schema: dict, max_tokens: int) -> str:
+    response = _ollama.chat(
+        model=config.OLLAMA_MODEL,
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_msg},
+        ],
+        format=schema,
+        options={"temperature": 0, "num_predict": max_tokens},
+        keep_alive="10m",
+    )
+    return response["message"]["content"]
+
+
+def _call_claude(system_prompt: str, user_msg: str, max_tokens: int) -> str:
+    response = _claude.messages.create(
+        model=config.ANTHROPIC_MODEL,
+        max_tokens=max_tokens,
+        system=system_prompt,
+        messages=[{"role": "user", "content": user_msg}],
+    )
+    raw = response.content[0].text.strip()
     if raw.startswith("```"):
         raw = raw.split("```")[1]
         if raw.startswith("json"):
             raw = raw[4:]
-    return json.loads(raw.strip())
+        raw = raw.strip()
+    return raw
 
+
+def _call_llm(system_prompt: str, user_msg: str,
+              response_model: type[BaseModel], max_tokens: int) -> BaseModel:
+    if config.LLM_BACKEND == "ollama":
+        raw = _call_ollama(system_prompt, user_msg,
+                           response_model.model_json_schema(), max_tokens)
+    else:
+        raw = _call_claude(system_prompt, user_msg, max_tokens)
+    return response_model.model_validate_json(raw)
+
+
+# ---------- Public API (signatures unchanged) ---------------------------------
 
 def classify_place(text):
-    """Send a place name to Claude and return the parsed classification."""
-    response = client.messages.create(
-        model=config.ANTHROPIC_MODEL,
-        max_tokens=400,
-        system=SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": text}],
-    )
-
-    return _parse_json_response(response.content[0].text)
+    """Classify a place name and return a dict matching ClassifyResponse."""
+    parsed = _call_llm(SYSTEM_PROMPT, text, ClassifyResponse, 400)
+    return parsed.model_dump()
 
 
 def get_city_attractions(city, country):
-    """Ask Claude for up to 5 iconic attractions in a given city.
+    """Return up to 5 iconic attractions for a city.
 
     Returns a list of dicts with keys: place_name, price_eur, description.
-    Returns [] if the response is malformed.
+    Returns [] if no eligible attractions are found.
     """
     user_msg = f"{city}, {country}" if country else city
-    response = client.messages.create(
-        model=config.ANTHROPIC_MODEL,
-        max_tokens=800,
-        system=ATTRACTIONS_SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": user_msg}],
-    )
+    parsed = _call_llm(ATTRACTIONS_SYSTEM_PROMPT, user_msg, AttractionsResponse, 800)
+    attractions = [a.model_dump() for a in parsed.attractions]
 
-    data = _parse_json_response(response.content[0].text)
-    attractions = data.get("attractions")
-    if not isinstance(attractions, list):
-        return []
-
-    # Filter by tier. Prefer world_famous; if a city has none, fall back to
-    # nationally_famous so small cities still get their best-known sites.
-    world_famous = [
-        a for a in attractions
-        if isinstance(a, dict) and a.get("notability") == "world_famous"
-    ]
+    world_famous = [a for a in attractions if a.get("notability") == "world_famous"]
     if world_famous:
         return world_famous[:MAX_WORLD_FAMOUS]
 
-    national = [
-        a for a in attractions
-        if isinstance(a, dict) and a.get("notability") == "nationally_famous"
-    ]
+    national = [a for a in attractions if a.get("notability") == "nationally_famous"]
     return national[:MAX_FALLBACK_NATIONAL]
